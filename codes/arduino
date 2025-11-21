@@ -1,0 +1,40 @@
+String inputString = "";   
+bool stringComplete = false;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(13, OUTPUT);     
+  Serial.println("Arduino ready...");
+}
+
+void loop() {
+  if (stringComplete) {
+    inputString.trim();    
+    
+    if (inputString == "ip") {
+      Serial.println("Detected: Incorrect Posture");
+      digitalWrite(13, HIGH);   
+    } 
+    else if (inputString == "cp") {
+      Serial.println("Detected: Correct Posture");
+      digitalWrite(13, LOW);    
+    } 
+    else {
+      Serial.println("Unknown command received.");
+    }
+
+    inputString = "";           
+    stringComplete = false;
+  }
+}
+
+void serialEvent() {
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    if (inChar == '\n') {
+      stringComplete = true;
+    } else {
+      inputString += inChar;
+    }
+  }
+}
