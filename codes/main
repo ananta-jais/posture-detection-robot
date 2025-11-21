@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Posture Correction - Pose Model</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: #001f3f;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #ffffff;
+        }
+
+        .container {
+            background: #002d54;
+            border: 2px solid #003d6b;
+            padding: 50px;
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #ffffff;
+            margin-bottom: 40px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .button-container {
+            margin-bottom: 40px;
+        }
+
+        button {
+            background: #003d6b;
+            color: white;
+            border: 2px solid #005a9e;
+            padding: 18px 50px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #005a9e;
+            border-color: #0074c7;
+        }
+
+        button:active {
+            background: #002d54;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .serial-controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            background: #001f3f;
+            border: 2px solid #003d6b;
+            padding: 16px 20px;
+            flex-wrap: wrap;
+        }
+
+        select {
+            background: #001f3f;
+            color: #ffffff;
+            border: 2px solid #005a9e;
+            padding: 12px 16px;
+            font-size: 1rem;
+            font-family: 'Poppins', sans-serif;
+            max-width: 100%;
+            min-width: 220px;
+            flex: 1 1 240px;
+        }
+
+        .serial-controls button {
+            padding: 12px 18px;
+            height: 48px;
+        }
+
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+            background: #001f3f;
+            padding: 30px;
+            border: 2px solid #003d6b;
+        }
+
+        #canvas {
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .result-container {
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #001f3f;
+            border: 2px solid #003d6b;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .result-text {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            opacity: 0;
+        }
+
+        .result-text.visible {
+            opacity: 1;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #003d6b;
+            color: #6b9bd1;
+            font-size: 0.9rem;
+            display: none;
+            border: 2px solid #005a9e;
+            font-weight: 400;
+        }
+
+        .status.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            button {
+                padding: 15px 35px;
+                font-size: 1rem;
+            }
+
+            .result-text {
+                font-size: 1.5rem;
+            }
+
+            .serial-controls {
+                gap: 10px;
+                padding: 12px 14px;
+            }
+
+            .serial-controls button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Posture Correction Monitor</h1>
+        <div class="button-container">
+            <button type="button" onclick="init()">Start Detection</button>
+        </div>
+        <div class="serial-controls">
+            <select id="com-select" title="Serial Ports"></select>
+            <button type="button" id="serial-refresh-btn">Refresh</button>
+            <button type="button" id="serial-connect-btn">Connect Serial</button>
+            <button type="button" id="serial-disconnect-btn" disabled>Disconnect</button>
+        </div>
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
+        <div class="result-container">
+            <div class="result-text" id="result-text">Waiting for detection...</div>
+        </div>
+        <div id="status" class="status">Camera is starting up...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script type="text/javascript">
+        // More API functions here:
+        // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/pose
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "./my_model/";
+        let model, webcam, ctx, maxPredictions;
+        let isDetecting = false;
+        let lastHighestClass = null;
+        let serialPort = null;
+        let serialWriter = null;
+        let portList = [];
+
+        async function init() {
+            const statusEl = document.getElementById("status");
+            const button = event.target;
+            
+            try {
+                button.disabled = true;
+                statusEl.classList.add("active");
+                statusEl.textContent = "Loading model...";
+
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+
+                // load the model and metadata
+                model = await tmPose.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                statusEl.textContent = "Accessing camera...";
+
+                // Convenience function to setup a webcam
+                const size = 200;
+                const flip = true; // whether to flip the webcam
+                webcam = new tmPose.Webcam(size, size, flip); // width, height, flip
+                await webcam.setup(); // request access to the webcam
+                await webcam.play();
+                
+                // append/get elements to the DOM
+                const canvas = document.getElementById("canvas");
+                canvas.width = size; 
+                canvas.height = size;
+                ctx = canvas.getContext("2d");
+                
+                statusEl.textContent = "Ready! Detecting posture...";
+                setTimeout(() => {
+                    statusEl.classList.remove("active");
+                }, 2000);
+
+                isDetecting = true;
+                lastHighestClass = null;
+                window.requestAnimationFrame(loop);
+
+            } catch (error) {
+                console.error("Error initializing:", error);
+                statusEl.textContent = "Error: " + error.message;
+                statusEl.style.background = "#3d1f1f";
+                statusEl.style.color = "#ff6b6b";
+                button.disabled = false;
+                isDetecting = false;
+            }
+        }
+
+        let currentPose = null;
+
+        async function loop(timestamp) {
+            if (!isDetecting) return;
+            
+            webcam.update(); // update the webcam frame
+            
+            // Estimate pose every frame for smooth drawing
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            currentPose = pose;
+            
+            // Prediction: run input through teachable machine classification model
+            const prediction = await model.predict(posenetOutput);
+
+            // Find the highest probability class
+            let highestPrediction = prediction[0];
+            for (let i = 1; i < prediction.length; i++) {
+                if (prediction[i].probability > highestPrediction.probability) {
+                    highestPrediction = prediction[i];
+                }
+            }
+
+            // Update result only if it changed (to avoid constant animations)
+            if (highestPrediction.className !== lastHighestClass) {
+                lastHighestClass = highestPrediction.className;
+                updateResult(highestPrediction.className);
+            }
+            
+            // Draw the pose
+            drawPose(currentPose);
+            
+            window.requestAnimationFrame(loop);
+        }
+
+        function updateResult(className) {
+            const resultEl = document.getElementById("result-text");
+            
+            // Animate out
+            gsap.to(resultEl, {
+                opacity: 0,
+                scale: 0.8,
+                duration: 0.3,
+                ease: "power2.in",
+                onComplete: () => {
+                    // Update text
+                    resultEl.textContent = className;
+                    
+                    // Animate in
+                    gsap.fromTo(resultEl, 
+                        {
+                            opacity: 0,
+                            scale: 1.2,
+                            y: 20
+                        },
+                        {
+                            opacity: 1,
+                            scale: 1,
+                            y: 0,
+                            duration: 0.5,
+                            ease: "back.out(1.7)"
+                        }
+                    );
+
+                    // Send serial code based on posture label
+                    if (className === "Correct Posture") {
+                        sendSerialCode("cp\n");
+                    } else if (className === "Incorrect Posture") {
+                        sendSerialCode("ip\n");
+                    }
+                }
+            });
+        }
+
+        function drawPose(pose) {
+            if (webcam.canvas) {
+                ctx.drawImage(webcam.canvas, 0, 0);
+                // draw the keypoints and skeleton
+                if (pose) {
+                    const minPartConfidence = 0.5;
+                    tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                    tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+                }
+            }
+        }
+
+        // --- Web Serial helpers ---
+        function setSerialUIState(connected) {
+            const connectBtn = document.getElementById("serial-connect-btn");
+            const disconnectBtn = document.getElementById("serial-disconnect-btn");
+            connectBtn.disabled = connected;
+            disconnectBtn.disabled = !connected;
+        }
+
+        async function populatePortsDropdown() {
+            const select = document.getElementById("com-select");
+            select.innerHTML = "";
+            portList = await navigator.serial.getPorts();
+            if (portList.length === 0) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "No ports found. Click Connect or Refresh.";
+                select.appendChild(opt);
+                return;
+            }
+            portList.forEach((p, idx) => {
+                const info = p.getInfo ? p.getInfo() : {};
+                const opt = document.createElement("option");
+                opt.value = String(idx);
+                const vid = info.usbVendorId ? info.usbVendorId.toString(16) : "??";
+                const pid = info.usbProductId ? info.usbProductId.toString(16) : "??";
+                opt.textContent = Port ${idx + 1} (VID 0x${vid} PID 0x${pid});
+                select.appendChild(opt);
+            });
+        }
+
+        async function connectSerial() {
+            const statusEl = document.getElementById("status");
+            try {
+                if (!('serial' in navigator)) {
+                    alert('Web Serial not supported in this browser. Use Chrome/Edge.');
+                    return;
+                }
+
+                // If a port is selected from dropdown, use it; otherwise prompt
+                const select = document.getElementById("com-select");
+                if (portList.length > 0 && select.value !== "") {
+                    serialPort = portList[Number(select.value)];
+                } else {
+                    serialPort = await navigator.serial.requestPort({ filters: [] });
+                }
+
+                await serialPort.open({ baudRate: 9600 });
+                serialWriter = serialPort.writable.getWriter();
+
+                statusEl.classList.add("active");
+                statusEl.textContent = "Serial connected at 9600 baud";
+                setTimeout(() => statusEl.classList.remove("active"), 2000);
+                setSerialUIState(true);
+                await populatePortsDropdown();
+                // Try to select the just-opened port in the dropdown
+                const idx = portList.findIndex(p => p === serialPort);
+                if (idx >= 0) {
+                    document.getElementById("com-select").value = String(idx);
+                }
+
+                // Global disconnect listener is already attached; no per-port listener needed
+            } catch (e) {
+                console.error('Serial connect error:', e);
+                statusEl.classList.add("active");
+                statusEl.textContent = "Serial error: " + e.message;
+                setTimeout(() => statusEl.classList.remove("active"), 3000);
+            }
+        }
+
+        async function disconnectSerial() {
+            cleanupSerial();
+            await populatePortsDropdown();
+        }
+
+        function cleanupSerial() {
+            try {
+                if (serialWriter) {
+                    serialWriter.releaseLock();
+                }
+            } catch (_) {}
+            serialWriter = null;
+            try {
+                if (serialPort && serialPort.close) {
+                    serialPort.close();
+                }
+            } catch (_) {}
+            serialPort = null;
+            setSerialUIState(false);
+        }
+
+        async function sendSerialCode(text) {
+            try {
+                if (!serialWriter) return;
+                const encoder = new TextEncoder();
+                await serialWriter.write(encoder.encode(text));
+            } catch (e) {
+                console.error('Serial write failed:', e);
+            }
+        }
+
+        // Initialize serial UI and events on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            if ('serial' in navigator) {
+                await populatePortsDropdown();
+                navigator.serial.addEventListener('connect', populatePortsDropdown);
+                navigator.serial.addEventListener('disconnect', populatePortsDropdown);
+            } else {
+                const select = document.getElementById('com-select');
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = "Web Serial unsupported";
+                select.appendChild(opt);
+                document.getElementById('serial-connect-btn').disabled = true;
+            }
+            document.getElementById('serial-connect-btn').addEventListener('click', connectSerial);
+            document.getElementById('serial-disconnect-btn').addEventListener('click', disconnectSerial);
+            document.getElementById('serial-refresh-btn').addEventListener('click', populatePortsDropdown);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            cleanupSerial();
+        });
+    </script>
+</body>
+</html>
